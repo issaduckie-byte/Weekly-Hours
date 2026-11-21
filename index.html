@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="A simple weekly work hours and overtime tracker.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<title>Weekly Hours</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},colors:{brand:{50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8'}}}}};
+</script>
+<style>
+.time-text-input,.break-input{font-size:16px}
+@media(min-width:640px){.time-text-input,.break-input{font-size:14px}}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen pb-32 transition-colors duration-200 selection:bg-brand-500 selection:text-white">
+<div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 sm:left-auto sm:right-5 sm:translate-x-0 z-50 flex flex-col gap-2 pointer-events-none w-[92%] max-w-sm"></div>
+<div id="confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+ <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl">
+  <h3 class="text-base font-bold text-rose-600 mb-3">Clear Entire Week?</h3>
+  <p class="text-sm text-slate-600 dark:text-slate-400 mb-5">This will reset all clock-in times, clock-out times, and breaks from Monday to Sunday.</p>
+  <div class="flex justify-end gap-2.5">
+   <button id="cancel-clear-btn" class="px-4 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-800">Cancel</button>
+   <button id="confirm-clear-btn" class="px-4 py-2 text-sm rounded-xl text-white bg-rose-600">Clear Week</button>
+  </div>
+ </div>
+</div>
+<header class="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+ <div class="max-w-3xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
+  <div class="flex items-center gap-2 min-w-0">
+   <div class="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center text-white shrink-0">◷</div>
+   <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white">Weekly Hours</h1>
+  </div>
+  <div class="flex items-center gap-1.5">
+   <select id="rounding-mode" aria-label="Calculation Mode" class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2 max-w-[155px]">
+    <option value="nearest-hour">Nearest Hour</option><option value="nearest-30">Nearest 30 min</option><option value="exact">Exact Minutes</option>
+   </select>
+   <button id="theme-toggle" aria-label="Toggle Dark Mode" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">☼</button>
+  </div>
+ </div>
+</header>
+<div class="max-w-3xl mx-auto px-3 sm:px-6 pt-3 sm:pt-5">
+ <div class="flex items-center justify-between gap-2 mb-3 px-1">
+  <p class="text-xs text-slate-500 dark:text-slate-400">Enter clock-in, clock-out and unpaid break minutes.</p>
+  <button id="copy-mon-top-btn" type="button" class="shrink-0 text-xs font-semibold text-brand-600 dark:text-brand-400 px-2 py-1 rounded-lg bg-brand-50 dark:bg-brand-950/60">Copy Mon → Fri</button>
+ </div>
+ <main id="days-container" class="space-y-2.5 sm:space-y-3"></main>
+ <section class="mt-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+   <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Weekly Summary &amp; Tools</h2>
+   <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl">
+    <label for="ot-threshold" class="text-xs text-slate-500 dark:text-slate-400">OT After:</label>
+    <input type="number" id="ot-threshold" value="40" min="1" max="168" class="w-11 text-xs font-bold text-center bg-white dark:bg-slate-900 border rounded-lg py-0.5">
+    <span class="text-xs text-slate-500">hrs</span>
+   </div>
+  </div>
+  <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+   <div class="bg-slate-50 dark:bg-slate-800/60 border rounded-xl p-3"><div class="text-[11px] text-slate-500">Regular</div><div id="regular-hours" class="text-sm sm:text-base font-bold mt-0.5">0.00 hrs</div></div>
+   <div class="bg-slate-50 dark:bg-slate-800/60 border rounded-xl p-3"><div class="text-[11px] text-slate-500">Overtime</div><div id="ot-hours" class="text-sm sm:text-base font-bold text-amber-600 mt-0.5">0.00 hrs</div></div>
+   <div class="bg-slate-50 dark:bg-slate-800/60 border rounded-xl p-3"><div class="text-[11px] text-slate-500">Unpaid Break</div><div id="total-breaks" class="text-sm sm:text-base font-bold mt-0.5">0m</div></div>
+  </div>
+  <div class="mb-4">
+   <div class="flex justify-between text-xs text-slate-500 mb-1.5"><span id="days-worked-count">0 of 7 days logged</span><span id="progress-percent">0% of 40h target</span></div>
+   <div class="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div id="progress-bar" class="h-full bg-brand-600 rounded-full" style="width:0%"></div></div>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t">
+   <button id="copy-mon-btn" class="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800">Copy Mon to Mon–Fri</button>
+   <button id="fill-650to430-btn" class="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800">Quick Fill 6:50am–4:30pm</button>
+   <button id="copy-summary-btn" class="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-brand-600 text-white">Copy Weekly Summary</button>
+   <button id="clear-week-btn" class="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-rose-50 text-rose-600">Clear Entire Week</button>
+  </div>
+ </section>
+</div>
+<footer class="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-lg">
+ <div class="max-w-3xl mx-auto px-3 sm:px-6 py-2.5">
+  <div class="flex items-center justify-between gap-2">
+   <div><div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Weekly Total</div><div class="flex items-baseline gap-2 mt-0.5"><span id="total-decimal" class="text-2xl sm:text-3xl font-extrabold text-brand-600">0.00 hrs</span><span id="total-hm" class="text-xs sm:text-sm text-slate-500">(0h 0m)</span></div></div>
+   <div class="text-right"><div id="footer-reg-ot" class="text-xs font-semibold">0h Reg + 0h OT</div><div id="live-math-breakdown" class="text-[11px] font-mono text-slate-500 max-w-[165px] truncate">0 + 0 + 0 + 0 + 0 + 0 + 0</div></div>
+  </div>
+ </div>
+</footer>
+<script>
+const DAYS=[{id:'mon',name:'Monday',short:'Mon'},{id:'tue',name:'Tuesday',short:'Tue'},{id:'wed',name:'Wednesday',short:'Wed'},{id:'thu',name:'Thursday',short:'Thu'},{id:'fri',name:'Friday',short:'Fri'},{id:'sat',name:'Saturday',short:'Sat',weekend:true},{id:'sun',name:'Sunday',short:'Sun',weekend:true}];
+const STORAGE_KEY='timetrack_weekly_data_v3',SETTINGS_KEY='timetrack_weekly_settings_v3',THEME_KEY='timetrack_theme_v1';
+let weekData={},overtimeThreshold=40,roundingMode='nearest-hour';
+function getEmptyWeekData(){const x={};DAYS.forEach(d=>x[d.id]={clockIn:'',clockOut:'',breakMins:''});return x}
+function loadState(){try{const d=localStorage.getItem(STORAGE_KEY);weekData=d?{...getEmptyWeekData(),...JSON.parse(d)}:getEmptyWeekData();const s=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}');if(s.overtimeThreshold)overtimeThreshold=Number(s.overtimeThreshold);if(s.roundingMode)roundingMode=s.roundingMode}catch(e){weekData=getEmptyWeekData()}document.getElementById('ot-threshold').value=overtimeThreshold;document.getElementById('rounding-mode').value=roundingMode}
+function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(weekData));localStorage.setItem(SETTINGS_KEY,JSON.stringify({overtimeThreshold,roundingMode}))}
+function initTheme(){const t=localStorage.getItem(THEME_KEY),dark=window.matchMedia?.('(prefers-color-scheme: dark)').matches;if(t==='dark'||(!t&&dark))document.documentElement.classList.add('dark')}
+function toggleTheme(){const dark=document.documentElement.classList.toggle('dark');localStorage.setItem(THEME_KEY,dark?'dark':'light')}
+function parseFlexibleTime(s){if(!s||typeof s!=='string')return null;let c=s.trim().toLowerCase().replace(/\./g,'');if(!c)return null;const mm=c.match(/^(.+?)\s*(am|pm|a|p)$/);let part=c,mer=null;if(mm){part=mm[1].trim();mer=['p','pm'].includes(mm[2])?'pm':'am'}let h,m=0;if(part.includes(':')){const a=part.split(':');if(a.length!==2||!/^\d{1,2}$/.test(a[0])||!/^\d{2}$/.test(a[1]))return null;h=+a[0];m=+a[1]}else if(/^\d{1,4}$/.test(part)){if(part.length<=2)h=+part;else if(part.length===3){h=+part.slice(0,1);m=+part.slice(1)}else{h=+part.slice(0,2);m=+part.slice(2)}}else return null;if(m>59)return null;if(mer){if(h<1||h>12)return null;h=mer==='am'?(h===12?0:h):(h===12?12:h+12);return{minutes:h*60+m,explicitMeridian:true,is24Hour:false}}if(h>23)return null;return{minutes:h*60+m,explicitMeridian:false,is24Hour:h>=13||(h===0&&part.startsWith('0'))}}
+function resolveShiftMinutes(a,b){const x=parseFlexibleTime(a),y=parseFlexibleTime(b);if(!x||!y)return{inMins:x?x.minutes:null,outMins:y?y.minutes:null};let i=x.minutes,o=y.minutes;if(!y.explicitMeridian&&!y.is24Hour&&o<i&&o<720)o+=720;return{inMins:i,outMins:o}}
+function formatMinutesTo12Hour(n){if(n===null||isNaN(n))return'';n=((n%1440)+1440)%1440;const h=Math.floor(n/60),m=n%60;return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`}
+function applyRoundingMode(m){if(m<=0)return 0;if(roundingMode==='nearest-hour')return Math.round(m/60)*60;if(roundingMode==='nearest-30')return Math.round(m/30)*30;return m}
+function calculateDayStats(e){const hi=!!e.clockIn?.trim(),ho=!!e.clockOut?.trim(),b=Math.max(0,parseInt(e.breakMins,10)||0);if(!hi&&!ho)return{status:'day-off',workedMins:0,exactMins:0,breakMins:0};const{inMins:i,outMins:o}=resolveShiftMinutes(e.clockIn,e.clockOut);if(i!==null&&o===null)return{status:'in-progress',workedMins:0,exactMins:0,breakMins:b};if(i===null&&o!==null)return{status:'incomplete',workedMins:0,exactMins:0,breakMins:b};if(i===null||o===null)return{status:'in-progress',workedMins:0,exactMins:0,breakMins:b};let raw=o-i,overnight=raw<0;if(overnight)raw+=1440;const exact=Math.max(0,raw-b);return{status:'completed',workedMins:applyRoundingMode(exact),exactMins:exact,breakMins:b,isOvernight:overnight}}
+function fmt(m){return{hm:`${Math.floor(m/60)}h ${Math.round(m%60)}m`,decimal:`${(m/60).toFixed(2)} hrs`}}
+function dailyHTML(s,f){if(s.status==='in-progress')return'<span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Need Clock Out</span>';if(s.status==='incomplete')return'<span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Need Clock In</span>';return`<span class="text-sm sm:text-base font-extrabold px-2.5 py-0.5 rounded-lg ${s.workedMins?'bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400':'text-slate-400'}">${f.decimal}</span>`}
+function renderDayCards(){const c=document.getElementById('days-container');c.innerHTML='';DAYS.forEach(d=>{const e=weekData[d.id],s=calculateDayStats(e),f=fmt(s.workedMins),card=document.createElement('div');card.id=`card-${d.id}`;card.className='bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-sm';card.innerHTML=`<div class="flex items-center justify-between gap-2 mb-2.5"><div class="font-bold text-base">${d.name} ${d.weekend?'<span class="text-[10px] text-slate-500">WKND</span>':''}</div><div class="flex items-center gap-1.5"><div id="total-${d.id}">${dailyHTML(s,f)}</div><button type="button" data-clear-day="${d.id}" aria-label="Clear ${d.name}" class="clear-day-btn p-1.5 text-slate-400 hover:text-rose-600">✕</button></div></div><div class="grid grid-cols-12 gap-2 items-end"><div class="col-span-5"><label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Clock In</label><input type="text" inputmode="text" id="in-${d.id}" data-day="${d.id}" data-field="clockIn" value="${e.clockIn}" placeholder="e.g. 6:50 am" autocomplete="off" class="time-text-input w-full px-3 py-2.5 font-semibold bg-slate-50 dark:bg-slate-950 border rounded-xl"></div><div class="col-span-5"><label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Clock Out</label><input type="text" inputmode="text" id="out-${d.id}" data-day="${d.id}" data-field="clockOut" value="${e.clockOut}" placeholder="e.g. 4:30 pm" autocomplete="off" class="time-text-input w-full px-3 py-2.5 font-semibold bg-slate-50 dark:bg-slate-950 border rounded-xl"></div><div class="col-span-2"><label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Break</label><input type="number" inputmode="numeric" id="break-${d.id}" data-day="${d.id}" data-field="breakMins" value="${e.breakMins}" placeholder="0" min="0" max="720" class="break-input w-full px-2 py-2.5 text-center font-semibold bg-slate-50 dark:bg-slate-950 border rounded-xl"></div></div>`;c.appendChild(card)});attachInputListeners();updateWeeklySummary()}
+function updateSingleDayUI(id){const s=calculateDayStats(weekData[id]);document.getElementById(`total-${id}`).innerHTML=dailyHTML(s,fmt(s.workedMins))}
+function syncAllInputs(){DAYS.forEach(d=>{const e=weekData[d.id];document.getElementById(`in-${d.id}`).value=e.clockIn;document.getElementById(`out-${d.id}`).value=e.clockOut;document.getElementById(`break-${d.id}`).value=e.breakMins;updateSingleDayUI(d.id)});updateWeeklySummary()}
+function updateWeeklySummary(){let total=0,breaks=0,logged=0,nums=[];DAYS.forEach(d=>{const s=calculateDayStats(weekData[d.id]);total+=s.workedMins;nums.push(Number.isInteger(s.workedMins/60)?`${s.workedMins/60}`:(s.workedMins/60).toFixed(1));if(s.status==='completed'&&s.workedMins>0){breaks+=s.breakMins;logged++}});const f=fmt(total),hrs=total/60,reg=Math.min(hrs,Math.max(1,overtimeThreshold)),ot=Math.max(0,hrs-overtimeThreshold),pct=Math.min(100,Math.round(hrs/Math.max(1,overtimeThreshold)*100));document.getElementById('total-decimal').textContent=f.decimal;document.getElementById('total-hm').textContent=`(${f.hm})`;document.getElementById('live-math-breakdown').textContent=nums.join(' + ');document.getElementById('footer-reg-ot').textContent=`${reg.toFixed(1)}h Reg + ${ot.toFixed(1)}h OT`;document.getElementById('regular-hours').textContent=`${reg.toFixed(2)} hrs`;document.getElementById('ot-hours').textContent=`${ot.toFixed(2)} hrs`;document.getElementById('total-breaks').textContent=breaks>=60?`${Math.floor(breaks/60)}h ${breaks%60}m`:`${breaks}m`;document.getElementById('days-worked-count').textContent=`${logged} of 7 days logged`;document.getElementById('progress-percent').textContent=`${pct}% of ${overtimeThreshold}h target`;document.getElementById('progress-bar').style.width=`${pct}%`}
+function attachInputListeners(){document.querySelectorAll('.time-text-input,.break-input').forEach(input=>{input.addEventListener('input',e=>{const{id,field}= {id:e.target.dataset.day,field:e.target.dataset.field};weekData[id][field]=e.target.value;saveState();updateSingleDayUI(id);updateWeeklySummary()});if(input.classList.contains('time-text-input'))input.addEventListener('blur',e=>{const id=e.target.dataset.day,entry=weekData[id],{inMins,outMins}=resolveShiftMinutes(entry.clockIn,entry.clockOut);if(inMins!==null&&entry.clockIn.trim()){entry.clockIn=formatMinutesTo12Hour(inMins);document.getElementById(`in-${id}`).value=entry.clockIn}if(outMins!==null&&entry.clockOut.trim()){entry.clockOut=formatMinutesTo12Hour(outMins);document.getElementById(`out-${id}`).value=entry.clockOut}saveState();updateSingleDayUI(id);updateWeeklySummary()})});document.querySelectorAll('.clear-day-btn').forEach(b=>b.addEventListener('click',e=>{const id=e.currentTarget.dataset.clearDay;weekData[id]={clockIn:'',clockOut:'',breakMins:''};saveState();syncAllInputs();toast(`Cleared ${DAYS.find(d=>d.id===id).name}`)}))}
+function toast(msg){const c=document.getElementById('toast-container'),t=document.createElement('div');t.className='bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold';t.textContent=msg;c.appendChild(t);setTimeout(()=>t.remove(),2300)}
+function copyMonday(){const m=weekData.mon;if(!m.clockIn&&!m.clockOut&&!m.breakMins){toast("Enter Monday's times first.");return}['tue','wed','thu','fri'].forEach(id=>weekData[id]={...m});saveState();syncAllInputs();toast('Copied Monday to Tue–Fri')}
+function quickFill(){['mon','tue','wed','thu','fri'].forEach(id=>weekData[id]={clockIn:'6:50 AM',clockOut:'4:30 PM',breakMins:''});saveState();syncAllInputs();toast('Filled Mon–Fri')}
+function copySummary(){let total=0,lines=['WEEKLY WORK HOURS SUMMARY','--------------------------'];DAYS.forEach(d=>{const e=weekData[d.id],s=calculateDayStats(e);total+=s.workedMins;lines.push(s.status==='completed'?`${d.short}: ${e.clockIn} – ${e.clockOut}${s.breakMins?` (${s.breakMins}m break)`:''} → ${fmt(s.workedMins).decimal}`:`${d.short}: Day Off`)});lines.push('--------------------------',`Total: ${fmt(total).decimal} (${fmt(total).hm})`);const ta=document.createElement('textarea');ta.value=lines.join('\n');document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Weekly summary copied!')}catch(e){toast('Unable to copy summary')}ta.remove()}
+function openModal(){document.getElementById('confirm-modal').classList.remove('hidden');document.getElementById('confirm-modal').classList.add('flex')}
+function closeModal(){document.getElementById('confirm-modal').classList.add('hidden');document.getElementById('confirm-modal').classList.remove('flex')}
+document.addEventListener('DOMContentLoaded',()=>{initTheme();loadState();renderDayCards();document.getElementById('theme-toggle').addEventListener('click',toggleTheme);document.getElementById('copy-mon-top-btn').addEventListener('click',copyMonday);document.getElementById('copy-mon-btn').addEventListener('click',copyMonday);document.getElementById('fill-650to430-btn').addEventListener('click',quickFill);document.getElementById('copy-summary-btn').addEventListener('click',copySummary);document.getElementById('clear-week-btn').addEventListener('click',openModal);document.getElementById('cancel-clear-btn').addEventListener('click',closeModal);document.getElementById('confirm-clear-btn').addEventListener('click',()=>{weekData=getEmptyWeekData();saveState();syncAllInputs();closeModal();toast('All weekly hours cleared')});document.getElementById('confirm-modal').addEventListener('click',e=>{if(e.target.id==='confirm-modal')closeModal()});document.getElementById('ot-threshold').addEventListener('input',e=>{const v=+e.target.value;if(v>0){overtimeThreshold=v;saveState();updateWeeklySummary()}});document.getElementById('rounding-mode').addEventListener('change',e=>{roundingMode=e.target.value;saveState();DAYS.forEach(d=>updateSingleDayUI(d.id));updateWeeklySummary()})});
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(console.error))}
+</script>
+</body>
+</html>
